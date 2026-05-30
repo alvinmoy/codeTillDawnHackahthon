@@ -182,10 +182,10 @@ class Conversation:
             return
         low = text.lower()
         has_wake = any(w in low for w in WAKE_WORDS)
+        print(f"[ears] heard: {text!r}  (wake={has_wake} armed={forced})")
         if not (forced or has_wake):
             return  # not addressed to Sayam
 
-        self._listen_now.clear()
         # strip the wake word from the front of the query
         query = text
         for w in WAKE_WORDS:
@@ -193,9 +193,18 @@ class Conversation:
             if idx != -1:
                 query = text[idx + len(w):].lstrip(" ,.!?-")
                 break
+
+        # Bare wake word ("Sayam") with no question yet → arm for the next sentence.
+        if not forced and len(query) < 2:
+            self._listen_now.set()
+            self.on_state("listening", "Listening - go ahead")
+            print("[ears] wake word heard; listening for your question...")
+            return
+
+        self._listen_now.clear()
         if len(query) < 2:
-            query = "The student greeted you — say hi back briefly."
-        print(f"[ears] heard: {text!r} -> query: {query!r}")
+            query = "The student said hi to you — greet them back in one short sentence."
+        print(f"[ears] query: {query!r}")
         self.on_state("thinking", f"You: {text}")
 
         try:
@@ -205,6 +214,7 @@ class Conversation:
             self.on_state("idle", "")
             return
 
+        print(f"[ears] reply: {reply!r}")
         self.on_state("speaking", f"Sayam: {reply}")
         # suspend listening for the spoken duration (rough estimate) + buffer
         self._suspend_until = time.time() + 2.0 + 0.075 * len(reply)

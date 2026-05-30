@@ -4,9 +4,18 @@ A vitals-aware desktop robot that watches how you are doing while you study, not
 
 Built for the Presage Technologies Hackathon.
 
+## Demo
+
+<p>
+  <img src="docs/media/sayam-1.jpg" width="320" alt="Sayam on the desk">
+  <img src="docs/media/sayam-2.jpg" width="320" alt="Sayam study companion">
+</p>
+
+**▶ Watch the demo video:** [docs/media/sayam-demo.mp4](docs/media/sayam-demo.mp4)
+
 ## Inspiration
 
-We are still college students, and we still have to study. Those late-night grind sessions are real: three hours deep, heart racing, shoulders at your ears, and you do not even notice you stopped absorbing anything an hour ago. Timers and to-do apps track tasks, but they are blind to the person doing them.
+We are still college students, wyd and we still have to study. Those late-night grind sessions are real: three hours deep, heart racing, shoulders at your ears, and you do not even notice you stopped absorbing anything an hour ago. Timers and to-do apps track tasks, but they are blind to the person doing them.
 
 We wanted a companion that could tell the difference between focused flow and quiet panic. Presage's video-to-vitals technology meant we did not need a watch or a chest strap, just a camera. Reachy Mini gave that camera a face, a voice, and a personality, so the readings feel like a friend nudging you to breathe.
 
@@ -40,13 +49,13 @@ A C++ vitals producer feeds a Python brain that drives the robot.
 
 ## Tech Stack
 
-| Component | Technology |
-|---|---|
-| Robot and movement | Reachy Mini, Reachy Mini Python SDK |
-| Vitals and stress | Presage SmartSpectra C++ SDK (video to vitals) |
-| Face detection | OpenCV Haar cascade |
-| Voice | ElevenLabs text-to-speech, transcoded with ffmpeg |
-| Brain | Python, with a C++20 vitals producer |
+| Component          | Technology                                        |
+| ------------------ | ------------------------------------------------- |
+| Robot and movement | Reachy Mini, Reachy Mini Python SDK               |
+| Vitals and stress  | Presage SmartSpectra C++ SDK (video to vitals)    |
+| Face detection     | OpenCV Haar cascade                               |
+| Voice              | ElevenLabs text-to-speech, transcoded with ffmpeg |
+| Brain              | Python, with a C++20 vitals producer              |
 
 ## Status
 

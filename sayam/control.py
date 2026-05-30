@@ -53,6 +53,8 @@ class RobotController:
                 return
             try:
                 fn()
+            except Exception:
+                pass  # robot may be disconnecting (e.g. Ctrl+C) — don't crash the thread
             finally:
                 self._busy.release()
         self._async(job)
