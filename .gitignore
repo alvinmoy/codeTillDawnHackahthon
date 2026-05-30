@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# C++ build output
+vitals/build/
+out/
+
+# Vendored Presage SmartSpectra SDK (proprietary, large — do NOT commit)
+vitals/vendor/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
