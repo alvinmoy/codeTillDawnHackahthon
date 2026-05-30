@@ -4,6 +4,17 @@ A physical, vitals-aware study companion that watches how you are doing, not jus
 
 Built for the Presage Technologies Hackathon.
 
+## Demo
+
+<p>
+  <img src="docs/media/sayam-1.jpg" width="320" alt="Sayam on the desk">
+  <img src="docs/media/sayam-2.jpg" width="320" alt="Sayam study companion">
+</p>
+
+**▶ Watch the demo:** [docs/media/sayam-demo.mp4](docs/media/sayam-demo.mp4)
+
+<video src="docs/media/sayam-demo.mp4" controls width="640"></video>
+
 ## Inspiration
 
 Everyone has a study setup. Almost no one has something watching out for them while they use it.
@@ -37,6 +48,12 @@ The spoken lines are generated with ElevenLabs text-to-speech and played back th
 Sayam uses face detection to follow you. It holds still and gently recenters on you when you drift out of frame, keeping your face and chest in view so the vitals reading stays good. Between events it idles with a soft breathing sway and occasional quirks such as a head tilt, a glance, a nod, or an antenna perk, so it always feels alive rather than frozen.
 
 ### How we run it
+
+Quickest path — one command (starts the Reachy Mini daemon, waits for the robot, and launches the app):
+
+```bash
+bash run_sayam.sh
+```
 
 There are two ways to run Sayam:
 

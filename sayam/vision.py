@@ -99,19 +99,27 @@ class FaceTracker:
         self.on_talk = None     # set by app -> conversation.trigger_listen
         self.convo_status = ""  # "You: ..." / "Sayam: ..." / "Listening..."
         self._flash = (None, 0.0)  # (action, until_ts) for click feedback
+        self._hover = None         # action under the cursor (for hover highlight)
         self._last_t = time.time()
         self._fps = 0.0
 
     # -- buttons -------------------------------------------------------------
-    def _on_mouse(self, event, x, y, flags, param):
-        if event != cv2.EVENT_LBUTTONDOWN:
-            return
+    def _hit(self, x, y):
         for b in self._buttons:
             x1, y1, x2, y2 = b["rect"]
             if x1 <= x <= x2 and y1 <= y <= y2:
+                return b
+        return None
+
+    def _on_mouse(self, event, x, y, flags, param):
+        if event == cv2.EVENT_MOUSEMOVE:
+            b = self._hit(x, y)
+            self._hover = b["action"] if b else None
+        elif event == cv2.EVENT_LBUTTONDOWN:
+            b = self._hit(x, y)
+            if b:
                 self._flash = (b["action"], time.time() + 0.2)
                 self._do(b["action"])
-                break
 
     def _do(self, action: str) -> None:
         print(f"[button] {action}")
