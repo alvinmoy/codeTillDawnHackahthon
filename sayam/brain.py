@@ -31,7 +31,7 @@ SYSTEM_PROMPT = (
     "exactly: OK"
 )
 
-NUDGE_COOLDOWN_S = 18.0   # don't repeat the same nudge within this window
+NUDGE_COOLDOWN_S = 30.0   # don't repeat the same nudge within this window
 
 
 class NotesBrain:

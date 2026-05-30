@@ -12,7 +12,7 @@ To avoid Sayam hearing itself, listening is suspended while it speaks.
 from __future__ import annotations
 
 import base64
-import struct
+import re
 import tempfile
 import threading
 import time
@@ -27,7 +27,17 @@ GROQ_BASE = "https://api.groq.com/openai/v1"
 STT_MODEL = "whisper-large-v3-turbo"
 CHAT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"  # vision: can see the notes
 
-WAKE_WORDS = ("sayam", "siam", "saiyam", "sayem", "salaam", "hey sam", "saiam")
+# Match how Whisper tends to hear "Sayam" (sayam/siam/sam/...), punctuation-proof.
+WAKE_RE = re.compile(
+    r"\b(sa+yam|sa+yem|saiyam|saiam|siam|salaam|psalm|sayyam|sam)\b", re.IGNORECASE)
+
+
+def detect_wake(text: str):
+    """Return (matched, query_after_wake)."""
+    m = WAKE_RE.search(text)
+    if not m:
+        return False, text
+    return True, text[m.end():].lstrip(" ,.!?:-")
 
 # Voice-activity thresholds (float32 audio in [-1, 1]) — calibrated to the
 # Reachy mic (silence ~0.0005, speech peaks ~0.13).
@@ -127,10 +137,13 @@ class Conversation:
             print(f"[ears] mic unavailable: {exc}")
             return
 
+        print(f"[ears] listening on mic (sr={sr}). Say 'Sayam ...' or use the Talk button.")
         buf = []
         in_speech = False
         speech_s = 0.0
         silence_s = 0.0
+        dbg_peak = 0.0
+        dbg_t = time.time()
         while not self._stop.is_set():
             chunk = self.mini.media.get_audio_sample()
             if chunk is None:
@@ -140,6 +153,14 @@ class Conversation:
             if mono.size == 0:
                 continue
             frame_s = mono.size / float(sr)
+
+            # Periodic mic-level debug so we can see audio is flowing / tune VAD.
+            _rms = float(np.sqrt(np.mean(mono ** 2)))
+            dbg_peak = max(dbg_peak, _rms)
+            if time.time() - dbg_t > 3.0:
+                print(f"[ears] mic peak RMS (3s) = {dbg_peak:.3f}  (START={START_RMS})")
+                dbg_peak = 0.0
+                dbg_t = time.time()
 
             # Ignore audio while Sayam is speaking (anti-feedback) — covers
             # greet/nudge/stress/answer, so it never hears its own "I'm Sayam".
@@ -180,19 +201,12 @@ class Conversation:
 
         if not text:
             return
-        low = text.lower()
-        has_wake = any(w in low for w in WAKE_WORDS)
+        has_wake, stripped = detect_wake(text)
         print(f"[ears] heard: {text!r}  (wake={has_wake} armed={forced})")
         if not (forced or has_wake):
             return  # not addressed to Sayam
 
-        # strip the wake word from the front of the query
-        query = text
-        for w in WAKE_WORDS:
-            idx = low.find(w)
-            if idx != -1:
-                query = text[idx + len(w):].lstrip(" ,.!?-")
-                break
+        query = stripped if has_wake else text
 
         # Bare wake word ("Sayam") with no question yet → arm for the next sentence.
         if not forced and len(query) < 2:

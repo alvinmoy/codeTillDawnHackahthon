@@ -84,13 +84,16 @@ def main() -> None:
             notes = NotesCanvas()
 
             def on_nudge(text: str) -> None:
+                # Don't talk over a conversation/greeting — drop the nudge if busy.
+                if controller.is_speaking():
+                    return
                 print(f"[brain] NUDGE: {text}")
                 notes.status_text = text
                 notes.status_color = (0, 0, 255)
                 nudge_until[0] = time.time() + 8.0
                 controller.nudge(text)
 
-            brain = NotesBrain(groq_key, notes.get_image, on_nudge, interval=4.0)
+            brain = NotesBrain(groq_key, notes.get_image, on_nudge, interval=6.0)
         elif not args.no_notes:
             print("[warn] GROQ_API_KEY missing — notes brain disabled.")
 
