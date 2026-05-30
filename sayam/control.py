@@ -43,10 +43,13 @@ class RobotController:
     def _async(self, fn: Callable[[], None]) -> None:
         threading.Thread(target=fn, daemon=True).start()
 
-    def _exclusive(self, fn: Callable[[], None]) -> None:
-        """Run fn only if no other movement action holds the lock."""
+    def _exclusive(self, fn: Callable[[], None], block: bool = False) -> None:
+        """Run fn under the movement lock. block=True waits (so explicit button
+        actions aren't dropped when a recenter happens to hold the lock);
+        block=False drops if busy (used by face-tracking recenters)."""
         def job():
-            if not self._busy.acquire(blocking=False):
+            ok = self._busy.acquire(timeout=3.0) if block else self._busy.acquire(blocking=False)
+            if not ok:
                 return
             try:
                 fn()
@@ -118,7 +121,7 @@ class RobotController:
             m.goto_target(head=create_head_pose(pitch=-6), antennas=[-0.6, 0.6], duration=0.4)
             m.goto_target(head=create_head_pose(pitch=8), antennas=[0.5, -0.5], duration=0.4)
             m.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=0.4)
-        self._exclusive(job)
+        self._exclusive(job, block=True)
 
     def nudge(self, text: str) -> None:
         """Tutor nudge: a small attention gesture + spoken correction."""
@@ -130,7 +133,7 @@ class RobotController:
             m.goto_target(head=create_head_pose(yaw=-6), duration=0.4)
             time.sleep(0.2)
             m.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=0.5)
-        self._exclusive(job)
+        self._exclusive(job, block=True)
 
     def fake_stress(self) -> None:
         if self.on_stress:
@@ -147,4 +150,4 @@ class RobotController:
             m.goto_target(head=create_head_pose(roll=-6, pitch=10), duration=0.7)
             time.sleep(0.3)
             m.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=0.7)
-        self._exclusive(job)
+        self._exclusive(job, block=True)

@@ -114,6 +114,7 @@ class FaceTracker:
                 break
 
     def _do(self, action: str) -> None:
+        print(f"[button] {action}")
         if action == "greet":
             self.controller.greet()
         elif action == "stress":
