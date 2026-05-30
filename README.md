@@ -1,115 +1,85 @@
-# Sayam — Your Study Companion on Reachy Mini
+# Sayam, Your Study Companion on Reachy Mini
 
-> A physical, vitals-aware study assistant that watches *how* you're doing — not just *what* you're doing — and steps in before burnout does.
+A physical, vitals-aware study companion that watches how you are doing, not just what you are doing, and steps in before burnout does.
 
-Built for the **Presage Technologies Hackathon**.
+Built for the Presage Technologies Hackathon.
 
----
+## Inspiration
 
-## ✨ Inspiration
+Everyone has a study setup. Almost no one has something watching out for them while they use it.
 
-Everyone has a study setup. Almost no one has something watching out for *them* while they use it.
+We have all had those late-night grind sessions where you are three hours deep, your heart is racing, your shoulders are at your ears, and you do not even notice you stopped absorbing anything an hour ago. Timers and to-do apps track tasks, but they are blind to the person doing them. They cannot tell the difference between focused flow and quiet panic.
 
-We've all had those late-night grind sessions where you're three hours deep, your heart is racing, your shoulders are at your ears, and you don't even notice you stopped absorbing anything an hour ago. Timers and to-do apps track tasks, but they're blind to the person doing them. They can't tell the difference between focused flow and quiet panic.
+We wanted a companion that could tell the difference. One that lives on your desk, sees you, reads your body, and actually reacts when your stress climbs. The breakthrough was realizing that Presage's video-to-vitals technology meant we did not need wearables or a chest strap. A camera is enough. Reachy Mini gave that camera a face, a voice, and a personality, turning a stream of biometric data into something that feels like a friend nudging you to breathe.
 
-We wanted to build a companion that could — one that lives on your desk, *sees* you, *reads your body*, and actually cares when you're spiraling. The breakthrough was realizing that **Presage's video-to-vitals technology** meant we didn't need wearables or chest straps. A camera is enough. And **Reachy Mini** gave that camera a face, a voice, and a personality — turning a stream of biometric data into something that feels like a friend nudging you to breathe.
+So we made Sayam: a small robot that sits with you while you work, reads your heart rate and breathing from a plain camera feed, and tells you when to take a break.
 
-So we made **Sayam**: a robot that studies *with* you, notices when you're stressed, and knows when to tell you to take a break — or help you push through the problem in front of you.
+## What It Does and How We Use It
 
----
+Sayam is a desktop companion built on the Reachy Mini robot. It combines contactless vitals sensing, face tracking, expressive movement, and spoken voice into a single physical presence on your desk.
 
-## 🎯 What It Does
+### It reads how you are feeling, without any wearables
 
-Sayam is a desktop study companion that combines **real-time vitals sensing**, **screen awareness**, and **conversational AI** into a single physical robot.
+The Reachy Mini camera streams video of you while you study. That feed is processed by the Presage SmartSpectra SDK, which converts plain video into live vitals: heart rate, breathing rate, and a heart-rate-variability stress index (Baevsky). No watch, no chest strap, just the camera already on the robot.
 
-### 1. It reads how you're feeling — without any wearables
-The **Reachy Mini camera** continuously streams video of you while you study. That feed is piped into the **Presage SDK**, which converts plain video into live vitals (e.g. heart rate) and signals of physiological stress.
+Sayam learns your resting heart rate over the first several readings, then watches for when you deviate from that personal baseline. When your heart rate climbs well above resting, your breathing quickens, or your stress index spikes, Sayam decides you look stressed.
 
-When Sayam detects that your heart rate is climbing or that you look visibly stressed, it speaks up:
+### It reacts physically and out loud
 
-> *"Hey, your heart rate's been climbing for a while — you've earned a 5-minute break. Step away for a sec."*
+When stress is detected, Sayam leans in with a concerned gesture and speaks up through its own speaker:
 
-It's proactive wellness, driven by your actual body, not a fixed Pomodoro clock.
+> "Hey, your heart rate is up and you have been at it a while. Let's take a five-minute break."
 
-### 2. It understands what you're working on
-A companion **desktop app** monitors your screen and feeds that context into an LLM. So Sayam isn't guessing — it knows you're stuck on a calculus integral or a failing unit test.
+The spoken lines are generated with ElevenLabs text-to-speech and played back through the robot's speaker, so a check-in lands as a physical, vocal presence rather than a notification you will ignore. A cooldown keeps Sayam from nagging, so it only speaks up when it matters.
 
-### 3. It helps you when you ask
-Say the wake word and ask for help. Sayam routes your screen context + question to the LLM and answers out loud, guiding you through the problem.
+### It keeps eye contact and feels alive
 
-> **You:** *"Hey Sayam, I can't figure out why this function keeps returning undefined."*
-> **Sayam:** *"Looks like you're returning inside the loop on line 12 — move it after..."*
+Sayam uses face detection to follow you. It holds still and gently recenters on you when you drift out of frame, keeping your face and chest in view so the vitals reading stays good. Between events it idles with a soft breathing sway and occasional quirks such as a head tilt, a glance, a nod, or an antenna perk, so it always feels alive rather than frozen.
 
-### 4. It feels alive
-All of Sayam's movement — head turns, nods, expressive gestures — runs through the **Reachy Mini SDK**, so check-ins land as a physical presence on your desk rather than a notification you'll ignore. Its voice is generated with **ElevenLabs** TTS for natural, warm speech.
+### How we run it
 
----
+There are two ways to run Sayam:
 
-## 🗣️ Talking to Sayam
+- `live_view.py` opens a window showing the robot camera with a face box and a live vitals overlay (heart rate, breathing rate, stress level), plus on-screen buttons to greet, trigger a demo stress reaction, start or stop the robot, and quit. This is the main demo app.
+- `orchestrator.py` runs headless: it greets you, then continuously monitors your vitals and reacts on its own when your stress climbs, with no window.
 
-Wake Sayam by saying:
+Both require the Reachy Mini daemon to be running and a Presage API key in a local `.env` file. ElevenLabs credentials enable spoken voice; without them, Sayam falls back to printing its lines so the demo still runs.
 
-- **"Hey Sayam"**
-- **"Sayam"**
+## How It Was Built
 
-From there you can ask for help with whatever's on your screen, ask how you're doing, or just talk it through.
+Sayam is split into a C++ vitals producer and a Python brain that drives the robot.
 
----
+### Vitals producer (C++)
 
-## 🧩 How It Works
+The `vitals/` directory holds a thin C++ wrapper around the Presage SmartSpectra C++ SDK. It opens a camera by device index (the Reachy Mini camera is index 1 on our Mac, and macOS lets the robot and the vitals process share it), runs the SmartSpectra pipeline, and streams the resulting metrics to stdout as line-delimited JSON, one object per line. Human-readable logs go to stderr so the parser can ignore them. It is built with CMake and a C++20 compiler.
 
-```
-┌─────────────────┐      video       ┌──────────────────┐     vitals/stress
-│  Reachy Mini    │ ───────────────▶ │   Presage SDK    │ ──────────────────┐
-│  Camera         │                  │ (video → vitals) │                   │
-└─────────────────┘                  └──────────────────┘                   ▼
-                                                                   ┌───────────────────┐
-┌─────────────────┐   screen context                              │   Decision / LLM  │
-│  Desktop App    │ ────────────────────────────────────────────▶ │   "Thinking"      │
-│  (screen watch) │                                                │   layer           │
-└─────────────────┘                                                └─────────┬─────────┘
-                                                                              │
-┌─────────────────┐   "Hey Sayam" / question                                 │ response
-│  Voice / Wake   │ ─────────────────────────────────────────────────────────┤
-│  Word           │                                                           ▼
-└─────────────────┘                                              ┌─────────────────────────┐
-                                                                 │  Reachy Mini SDK  +     │
-                                                                 │  ElevenLabs TTS         │
-                                                                 │  (movement + speech)    │
-                                                                 └─────────────────────────┘
-```
+### Python brain
 
-**The loop:**
-1. Reachy Mini's camera captures the user studying.
-2. The Presage SDK turns that video into live vitals and stress signals.
-3. The desktop app captures on-screen context.
-4. Vitals + screen context + voice requests flow into the LLM "thinking" layer.
-5. Sayam responds — speaking through ElevenLabs and moving through the Reachy Mini SDK — either proactively (*"take a break"*) or on request (*"here's how to solve that"*).
+The `sayam/` directory holds the Python side:
 
----
+- `vitals_bridge.py` spawns the C++ binary as a subprocess, reads the JSON lines, and parses each Presage metrics envelope into a simple `VitalsSample` (pulse rate, breathing rate, HRV stress index, and confidences).
+- `vision.py` runs OpenCV Haar-cascade face detection, draws the live view and vitals overlay, and aims the robot at your face using a center deadzone so it only moves when you actually drift.
+- `liveliness.py` owns the robot's head and antennas through a single roughly 30 Hz control loop, so nothing fights over the motors. It produces the idle breathing sway and random quirks, smoothly follows your face when one is present, and plays expressive gestures such as greet and concerned.
+- `control.py` is the demo's single owner of movement and voice. It serializes every action behind one non-blocking lock so gestures never overlap, and handles recentering, greeting, and the stress reaction.
+- `voice.py` wraps ElevenLabs text-to-speech. ElevenLabs WAV output is a paid tier, so we request MP3 (available on all tiers) and transcode to WAV locally with ffmpeg, normalizing loudness so the robot's small speaker is clearly audible. The WAV is then played through the Reachy Mini speaker.
+- `orchestrator.py` and `live_view.py` are the two entry points described above.
 
-## 🛠️ Tech Stack
+### Stress logic
 
-| Component | Technology |
-|---|---|
-| **Robot platform & movement** | [Reachy Mini](https://www.pollen-robotics.com/) + Reachy Mini SDK |
-| **Vitals & stress sensing** | [Presage Technologies](https://www.presagetech.com/) SDK (video → vitals) |
-| **Camera input** | Reachy Mini onboard camera |
-| **Screen awareness** | Desktop monitoring app |
-| **Reasoning** | LLM-based "thinking" layer (screen context + vitals + voice) |
-| **Voice (TTS)** | [ElevenLabs](https://elevenlabs.io/) |
-| **Wake word** | "Hey Sayam" / "Sayam" |
+Stress is decided from the parsed vitals. The orchestrator builds a resting heart-rate baseline from the first readings, then flags stress when heart rate rises a set amount above that baseline or when breathing rate crosses a threshold, gated by a confidence floor and a cooldown. The live view also bands the Baevsky stress index into low, moderate, and high for the overlay.
 
----
+## Tech Stack
 
-## 🚀 Why It Matters
+| Component                   | Technology                                               |
+| --------------------------- | -------------------------------------------------------- |
+| Robot platform and movement | Reachy Mini and the Reachy Mini Python SDK               |
+| Vitals and stress sensing   | Presage SmartSpectra C++ SDK (video to vitals)           |
+| Camera input                | Reachy Mini onboard camera                               |
+| Face detection              | OpenCV Haar cascade                                      |
+| Voice                       | ElevenLabs text-to-speech, transcoded to WAV with ffmpeg |
+| Vitals producer             | C++20, built with CMake                                  |
+| Brain and orchestration     | Python                                                   |
 
-Productivity tools optimize output. Sayam optimizes *you*. By fusing contactless biometrics with screen context and a genuinely present physical companion, it closes the gap between "I'm working hard" and "I'm working well" — catching stress early, encouraging real breaks, and offering help exactly when you're stuck.
+## Status
 
-Healthier study sessions. Better focus. A companion that actually has your back.
-
----
-
-## 📋 Status
-
-🚧 Built during the Presage Technologies Hackathon — actively in development.
+Built during the Presage Technologies Hackathon and actively in development.

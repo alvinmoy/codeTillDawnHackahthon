@@ -36,6 +36,7 @@ class RobotController:
         self.active = True                      # autonomous movement (face tracking)
         self.on_stress: Optional[Callable[[bool], None]] = None
         self._busy = threading.Lock()
+        self._speech = threading.Lock()         # serialize spoken audio
         self._last_move = 0.0
 
     # -- helpers -------------------------------------------------------------
@@ -54,23 +55,37 @@ class RobotController:
         self._async(job)
 
     def _speak(self, text: str) -> None:
+        print(f"🗣️  SAYAM: {text}")
         if self.voice is None:
-            print(f"🗣️  SAYAM: {text}")
             return
-        try:
-            wav = self.voice.synthesize_to_wav(text)
-            self.mini.media.play_sound(wav)
+        with self._speech:  # one utterance at a time
             try:
-                with wave.open(wav, "rb") as wf:
-                    dur = wf.getnframes() / float(wf.getframerate())
-            except Exception:
-                dur = 4.0
-            time.sleep(dur + 1.0)
-            os.unlink(wav)
-        except Exception as exc:
-            print(f"[voice] {exc}")
+                wav = self.voice.synthesize_to_wav(text)
+                self.mini.media.play_sound(wav)
+                try:
+                    with wave.open(wav, "rb") as wf:
+                        dur = wf.getnframes() / float(wf.getframerate())
+                except Exception:
+                    dur = 4.0
+                time.sleep(dur + 1.0)
+                os.unlink(wav)
+            except Exception as exc:
+                print(f"[voice] {exc}")
+
+    def say(self, text: str) -> None:
+        """Speak a conversational reply (+ a subtle nod) — used by Q&A."""
+        self._async(lambda: self._speak(text))
+
+        def nod():
+            self.mini.goto_target(head=create_head_pose(pitch=6), duration=0.4)
+            time.sleep(0.2)
+            self.mini.goto_target(create_head_pose(), duration=0.4)
+        self._exclusive(nod)
 
     # -- start/stop ----------------------------------------------------------
+    def is_speaking(self) -> bool:
+        return self._speech.locked()
+
     def set_active(self, value: bool) -> None:
         self.active = value
 
@@ -103,6 +118,18 @@ class RobotController:
             m.goto_target(head=create_head_pose(pitch=-6), antennas=[-0.6, 0.6], duration=0.4)
             m.goto_target(head=create_head_pose(pitch=8), antennas=[0.5, -0.5], duration=0.4)
             m.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=0.4)
+        self._exclusive(job)
+
+    def nudge(self, text: str) -> None:
+        """Tutor nudge: a small attention gesture + spoken correction."""
+        def job():
+            self._async(lambda: self._speak(text))
+            m = self.mini
+            m.goto_target(head=create_head_pose(pitch=8, yaw=6), antennas=[0.5, 0.5], duration=0.5)
+            time.sleep(0.25)
+            m.goto_target(head=create_head_pose(yaw=-6), duration=0.4)
+            time.sleep(0.2)
+            m.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=0.5)
         self._exclusive(job)
 
     def fake_stress(self) -> None:

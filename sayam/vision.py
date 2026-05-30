@@ -95,8 +95,12 @@ class FaceTracker:
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self._cascade = cv2.CascadeClassifier(cascade_path)
         self._buttons = []      # list of dicts: {label, rect, action, color}
-        self._quit = False
+        self.quit = False
+        self.on_talk = None     # set by app -> conversation.trigger_listen
+        self.convo_status = ""  # "You: ..." / "Sayam: ..." / "Listening..."
         self._flash = (None, 0.0)  # (action, until_ts) for click feedback
+        self._last_t = time.time()
+        self._fps = 0.0
 
     # -- buttons -------------------------------------------------------------
     def _on_mouse(self, event, x, y, flags, param):
@@ -116,15 +120,19 @@ class FaceTracker:
             self.controller.fake_stress()
         elif action == "toggle":
             self.controller.toggle_active()
+        elif action == "talk":
+            if self.on_talk:
+                self.on_talk()
         elif action == "quit":
-            self._quit = True
+            self.quit = True
 
     def _draw_buttons(self, canvas, video_h, w) -> None:
         active = self.controller.active
         specs = [
             ("Greet", "greet", (60, 140, 60)),
-            ("Fake Stress", "stress", (40, 40, 200)),
-            ("Stop Robot" if active else "Start Robot", "toggle",
+            ("Talk", "talk", (150, 90, 30)),
+            ("Stress", "stress", (40, 40, 200)),
+            ("Stop" if active else "Start", "toggle",
              (140, 110, 40) if active else (40, 110, 140)),
             ("Quit", "quit", (70, 70, 70)),
         ]
@@ -184,6 +192,10 @@ class FaceTracker:
                 cv2.putText(bgr, "STRESSED - take a break", (10, h - 65),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA)
 
+        if self.convo_status:
+            cv2.putText(bgr, self.convo_status[:64], (10, h - 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 80), 2, cv2.LINE_AA)
+
         if face is not None:
             x, y, fw, fh = face
             box_color = (0, 200, 255) if tracking_now else (0, 220, 0)
@@ -193,58 +205,60 @@ class FaceTracker:
         if neck is not None:
             cv2.drawMarker(bgr, neck, (255, 150, 0), cv2.MARKER_CROSS, 16, 2)
 
-    def run(self, display_width: int = 960) -> None:
+    def attach(self) -> None:
         cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
         cv2.setMouseCallback(self.window_name, self._on_mouse)
-        last = time.time()
-        fps = 0.0
+
+    def step(self, display_width: int = 960) -> None:
+        """Render one camera frame (no waitKey — the app loop owns that)."""
+        frame = self.mini.media.get_frame()
+        if frame is None:
+            return
+
+        bgr_full = frame[:, :, ::-1]
+        full_h, full_w = bgr_full.shape[:2]
+        scale = display_width / float(full_w)
+        bgr = cv2.resize(bgr_full, (display_width, int(full_h * scale)))
+        dh, dw = bgr.shape[:2]
+        sx, sy = full_w / float(dw), full_h / float(dh)
+
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        small = cv2.resize(gray, (0, 0), fx=DETECT_SCALE, fy=DETECT_SCALE)
+        dets = self._cascade.detectMultiScale(small, scaleFactor=1.2,
+                                              minNeighbors=5, minSize=(40, 40))
+        faces = [(int(x / DETECT_SCALE), int(y / DETECT_SCALE),
+                  int(fw / DETECT_SCALE), int(fh / DETECT_SCALE))
+                 for (x, y, fw, fh) in dets]
+        face = None
+        neck = None
+        issued = False
+        if len(faces) > 0:
+            face = max(faces, key=lambda f: f[2] * f[3])
+            x, y, fw, fh = face
+            neck = (int(x + fw / 2),
+                    min(int(y + fh / 2 + NECK_OFFSET_FACES * fh), dh - 1))
+            ndx = (neck[0] - dw / 2) / (dw / 2)
+            ndy = (neck[1] - dh / 2) / (dh / 2)
+            if abs(ndx) > DEADZONE_X or abs(ndy) > DEADZONE_Y:
+                issued = self.controller.recenter(int(neck[0] * sx), int(neck[1] * sy))
+
+        now = time.time()
+        self._fps = 0.9 * self._fps + 0.1 * (1.0 / max(now - self._last_t, 1e-3))
+        self._last_t = now
+        self._overlay(bgr, face, neck, issued, self._fps)
+
+        canvas = cv2.copyMakeBorder(bgr, 0, BAR_H, 0, 0, cv2.BORDER_CONSTANT,
+                                    value=(20, 20, 20))
+        self._draw_buttons(canvas, dh, dw)
+        cv2.imshow(self.window_name, canvas)
+        if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) < 1:
+            self.quit = True
+
+    def run(self, display_width: int = 960) -> None:
+        """Standalone loop (camera only)."""
+        self.attach()
         print("Live view up. Use the on-screen buttons. (Quit button to exit.)")
-        while not self._quit:
-            frame = self.mini.media.get_frame()
-            if frame is None:
-                cv2.waitKey(15)
-                continue
-
-            bgr_full = frame[:, :, ::-1]
-            full_h, full_w = bgr_full.shape[:2]
-            scale = display_width / float(full_w)
-            bgr = cv2.resize(bgr_full, (display_width, int(full_h * scale)))
-            dh, dw = bgr.shape[:2]
-            sx, sy = full_w / float(dw), full_h / float(dh)
-
-            gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-            # Detect on a downscaled gray for speed, then scale boxes back up.
-            small = cv2.resize(gray, (0, 0), fx=DETECT_SCALE, fy=DETECT_SCALE)
-            dets = self._cascade.detectMultiScale(small, scaleFactor=1.2,
-                                                  minNeighbors=5, minSize=(40, 40))
-            faces = [(int(x / DETECT_SCALE), int(y / DETECT_SCALE),
-                      int(fw / DETECT_SCALE), int(fh / DETECT_SCALE))
-                     for (x, y, fw, fh) in dets]
-            face = None
-            neck = None
-            issued = False
-            if len(faces) > 0:
-                face = max(faces, key=lambda f: f[2] * f[3])
-                x, y, fw, fh = face
-                neck = (int(x + fw / 2),
-                        min(int(y + fh / 2 + NECK_OFFSET_FACES * fh), dh - 1))
-                ndx = (neck[0] - dw / 2) / (dw / 2)
-                ndy = (neck[1] - dh / 2) / (dh / 2)
-                if abs(ndx) > DEADZONE_X or abs(ndy) > DEADZONE_Y:
-                    issued = self.controller.recenter(int(neck[0] * sx), int(neck[1] * sy))
-
-            now = time.time()
-            fps = 0.9 * fps + 0.1 * (1.0 / max(now - last, 1e-3))
-            last = now
-            self._overlay(bgr, face, neck, issued, fps)
-
-            # Stack the button bar under the video into one canvas.
-            canvas = cv2.copyMakeBorder(bgr, 0, BAR_H, 0, 0, cv2.BORDER_CONSTANT,
-                                        value=(20, 20, 20))
-            self._draw_buttons(canvas, dh, dw)
-
-            cv2.imshow(self.window_name, canvas)
+        while not self.quit:
+            self.step(display_width)
             cv2.waitKey(1)
-            if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) < 1:
-                break
         cv2.destroyAllWindows()
