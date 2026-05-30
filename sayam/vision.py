@@ -137,32 +137,47 @@ class FaceTracker:
 
     def _draw_buttons(self, canvas, video_h, w) -> None:
         active = self.controller.active
+        # palette (BGR), tuned to feel like a cohesive control deck
         specs = [
-            ("Greet", "greet", (60, 140, 60)),
-            ("Talk", "talk", (150, 90, 30)),
-            ("Stress", "stress", (40, 40, 200)),
+            ("Greet", "greet", (90, 165, 95)),
+            ("Talk", "talk", (185, 130, 60)),
+            ("Fake Stress", "stress", (70, 70, 210)),
             ("Stop" if active else "Start", "toggle",
-             (140, 110, 40) if active else (40, 110, 140)),
-            ("Quit", "quit", (70, 70, 70)),
+             (160, 130, 55) if active else (55, 140, 170)),
+            ("Quit", "quit", (90, 90, 95)),
         ]
         self._buttons = []
         n = len(specs)
         bw = w // n
         y1, y2 = video_h, video_h + BAR_H
+        now = time.time()
         for i, (label, action, color) in enumerate(specs):
-            x1 = i * bw + 6
-            x2 = (i + 1) * bw - 6
-            flashing = self._flash[0] == action and time.time() < self._flash[1]
-            c = tuple(min(255, v + 70) for v in color) if flashing else color
-            cv2.rectangle(canvas, (x1, y1 + 8), (x2, y2 - 8), c, -1)
-            cv2.rectangle(canvas, (x1, y1 + 8), (x2, y2 - 8), (230, 230, 230), 1)
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            x1, x2 = i * bw + 8, (i + 1) * bw - 8
+            by1, by2 = y1 + 9, y2 - 9
+            flashing = self._flash[0] == action and now < self._flash[1]
+            hovering = self._hover == action
+            bump = 90 if flashing else (45 if hovering else 0)
+            c = tuple(min(255, v + bump) for v in color)
+            cv2.rectangle(canvas, (x1, by1), (x2, by2), c, -1)
+            border = (255, 255, 255) if (hovering or flashing) else (200, 200, 205)
+            cv2.rectangle(canvas, (x1, by1), (x2, by2), border, 1, cv2.LINE_AA)
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
             tx = x1 + (x2 - x1 - tw) // 2
             ty = y1 + (BAR_H + th) // 2
-            cv2.putText(canvas, label, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+            cv2.putText(canvas, label, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                         (255, 255, 255), 2, cv2.LINE_AA)
             self._buttons.append({"label": label, "rect": (x1, y1, x2, y2),
                                   "action": action})
+
+    @staticmethod
+    def _panel(img, x1, y1, x2, y2, color=(18, 18, 24), alpha=0.55):
+        """Draw a translucent panel so the video shows through the HUD."""
+        sub = img[max(y1, 0):y2, max(x1, 0):x2]
+        if sub.size == 0:
+            return
+        overlay = sub.copy()
+        overlay[:] = color
+        cv2.addWeighted(overlay, alpha, sub, 1 - alpha, 0, sub)
 
     # -- overlay on the video region ----------------------------------------
     def _overlay(self, bgr, face, neck, tracking_now, fps) -> None:
